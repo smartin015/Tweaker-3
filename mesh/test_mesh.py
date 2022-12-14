@@ -93,7 +93,16 @@ def test_area_cumulation():
 
 @pytest.mark.skip("TODO")
 def test_death_star():
-    pass
+    # Test mesh is an open-bottomed tetrahedron (triangular pyramid)
+    # We expect the death star algo to add a Z-up orientation with 
+    # area weight of ~2
+    # TODO FIX 
+    m = Mesh([
+        [0,0,0],[0,1,0],[0,0,1],
+        [0,0,0],[1,0,0],[0,0,1],
+        [1,0,0],[0,1,0],[0,0,1],
+    ])
+    assert Orientation([0,0,1], 2) in m.death_star(best_n=1, iterations=100)
 
 @pytest.mark.skip("TODO")
 def test_project_vertices():

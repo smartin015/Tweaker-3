@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+from math import cos
 
 class Orientation:
-    def __init__(self, vec, weight):
+    def __init__(self, vec, weight=0):
         self.weight = weight
-        self.vec = vec / np.linalg.norm(vec)
+        self.vec = vec
+        n = np.linalg.norm(vec) 
+        if n != 1.0:
+            self.vec /= n 
 
     def __eq__(self, other):
         return np.array_equal(self.vec, other.vec) and self.weight == other.weight
@@ -13,7 +17,7 @@ class Orientation:
         return f"Orientation({self.vec}, {self.weight})"
 
     @staticmethod
-    def add_supplements():
+    def supplements():
         """Supplement 18 additional vectors - axes plus 45 degree multi-axis rotations
         Returns:
             Basic Orientation Field"""
@@ -24,7 +28,7 @@ class Orientation:
             for unit in (1, -1):
                v = np.zeros(3)
                v[axis] = unit
-               result.append(Orientation(v, 0))
+               result.append(Orientation(v))
 
         tilt = 0.70710678 # unit vector when value of two axes, 3rd axis zero
         for u1 in (1, -1):
@@ -33,21 +37,22 @@ class Orientation:
                     v = np.zeros(3)
                     v[xyz[0]] = u1
                     v[xyz[1]] = u2
-                    result.append(Orientation(v, 0))
+                    result.append(Orientation(v))
 
         return result
 
     @staticmethod
-    def unique(old_orients, degrees=5):
+    def decimate(orients, degrees=5):
         """
         Removing similar orientations
         Args:
-            old_orients (list): list of Orientations
+            orients (list): list of Orientations
+            degrees (float): Angle within which similar orientations are removed
         Returns:
             Unique Orientations no closer than `degrees` between each other """
-        tol_dist = acos(np.degrees * np.pi / 180)
+        tol_dist = cos(degrees * np.pi / 180)
         result = list()
-        for i in old_orients:
+        for i in orients:
             duplicate = False
             for j in result:
                 # redundant vectors have an difference smaller than

@@ -128,9 +128,9 @@ class Mesh:
 
         return [Orientation(*tn) for tn in orient.most_common(best_n)]
 
-    def death_star(self, best_n):
+    def death_star(self, best_n, iterations=None):
         """
-        Creating random faces by adding a random vertex to an existing edge.
+        Create random faces by adding a random vertex to an existing edge.
         Common orientations of these faces are promising orientations for
         placement.
         Args:
@@ -139,10 +139,11 @@ class Mesh:
             list of the common Orientations.
         """
 
-        # Small files need more calculations
-        # These values were probably picked as a best guess...
         mesh_len = len(self.mesh)
-        iterations = int(np.ceil(20000 / (mesh_len + 100)))
+        if iterations is None:
+            # Small files need more calculations
+            # Const values were probably picked by feel...
+            iterations = int(np.ceil(20000 / (mesh_len + 100)))
 
         vertices = self.mesh[:, M.V0:M.V2+1, :]
         tot_normalized_orientations = np.zeros((iterations * mesh_len + 1, 3))
@@ -187,7 +188,7 @@ class Mesh:
         # that orientation and collect them as Orientations using the face count
         # as the weight.
         for sum_side, count in top_n:
-            face_unique, face_count = np.unique(tot_normalized_orientations[orientations == sum_side], axis=0, return_counts=True)
+            face_unique, face_count = np.unique(tot_normalized_orientations[orient == sum_side], axis=0, return_counts=True)
             candidates += [Orientation(f, c) for f, c in zip(face_unique, face_count)]
         # Filter non-injective singles, i.e. candidate orientations
         # where there was only a single face and the face we randomly generated.
@@ -197,17 +198,17 @@ class Mesh:
         candidates += [Orientation(-c.vec, c.weight) for c in candidates]
         return candidates
 
-    def project_vertices(self, orientation):
+    def project_vertices(self, rotation):
         """Supplement the mesh array with scalars (max and median)
         for each face projected onto the orientation vector.
         Args:
-            orientation (np.array): with format 3 x 3.
+            rotation (np.array): 3x3 rotation matrix
         Returns:
             None
         """
-        self.mesh[:, M.A1, A1.V0Z] = np.inner(self.mesh[:, V0, :], orientation)
-        self.mesh[:, M.A1, A1.V1Z] = np.inner(self.mesh[:, V1, :], orientation)
-        self.mesh[:, M.A1, A1.V2Z] = np.inner(self.mesh[:, V2, :], orientation)
+        self.mesh[:, M.A1, A1.V0Z] = np.inner(self.mesh[:, V0, :], rotation)
+        self.mesh[:, M.A1, A1.V1Z] = np.inner(self.mesh[:, V1, :], rotation)
+        self.mesh[:, M.A1, A1.V2Z] = np.inner(self.mesh[:, V2, :], rotation)
 
         self.mesh[:, M.A2, A2.MAX_Z] = np.max(self.mesh[:, M.A1, :], axis=1)
         self.mesh[:, M.A2, A2.MED_Z] = np.median(self.mesh[:, M.A1, :], axis=1)

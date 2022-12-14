@@ -7,6 +7,38 @@ from collections import Counter
 # upgrade numpy with: "pip install numpy --upgrade"
 import numpy as np
 
+class M:
+    # Use these constants to index into the second axis of the mesh matrix,
+    # which has shape <num_vertices> x 6 x 3.
+    # e.g. `mesh[:, M.NORM, :]` is all the normal vectors of the faces, in
+    # <num_vertices> x 3 format.
+    NORM = 0
+    V0 = 1
+    V1 = 2
+    V2 = 3
+    A1 = 4
+    A2 = 5
+
+class A1:
+    # These index the last dimension of the A1 column of the mesh matrix,
+    # e.g. `mesh[:, M.A1, A1.V0Z]`
+    V0Z = 0
+    V1Z = 1
+    V2Z = 2
+
+class A2:
+    # These index the last dimension of the A2 column of the mesh matrix,
+    # e.g. `mesh[:, M.A2, A2.AREA]`
+    AREA = 0
+    MAX_Z = 1
+    MED_Z = 2
+
+class V:
+    # These index the last dimension of the V0..2 columns of the mesh matrix,
+    # e.g. `mesh[:, M.V0, V.X]` is the x axis component of vertex 0 of all faces.
+    X = 0
+    Y = 1
+    Z = 2
 
 # These parameter were minimized by the evolutionary algorithm
 # https://github.com/ChristophSchranz/Tweaker-3_optimize-using-ea, branch ea-optimize_20200414' on 100 objects
@@ -226,28 +258,28 @@ class Tweak:
 
         # append columns with a_min, area_size
         addendum = np.zeros((face_count, 2, 3))
-        addendum[:, 0, 0] = mesh[:, 1, 2]
-        addendum[:, 0, 1] = mesh[:, 2, 2]
-        addendum[:, 0, 2] = mesh[:, 3, 2]
+        addendum[:, 0, A1.V0Z] = mesh[:, M.V0, V.Z]
+        addendum[:, 0, A1.V1Z] = mesh[:, M.V1, V.Z]
+        addendum[:, 0, A1.V2Z] = mesh[:, M.V2, V.Z]
 
         # calc area size
-        addendum[:, 1, 0] = np.sqrt(np.sum(np.square(mesh[:, 0, :]), axis=-1)).reshape(face_count)
-        addendum[:, 1, 1] = np.max(mesh[:, 1:4, 2], axis=1)
-        addendum[:, 1, 2] = np.median(mesh[:, 1:4, 2], axis=1)
+        addendum[:, 1, A2.AREA] = np.sqrt(np.sum(np.square(mesh[:, M.NORM, :]), axis=-1)).reshape(face_count)
+        addendum[:, 1, A2.MAX_Z] = np.max(mesh[:, M.V0:M.V2+1, V.Z], axis=1)
+        addendum[:, 1, A2.MED_Z] = np.median(mesh[:, M.V0:M.V2+1, V.Z], axis=1)
         mesh = np.hstack((mesh, addendum))
 
         # filter faces without area
-        mesh = mesh[mesh[:, 5, 0] != 0]
+        mesh = mesh[mesh[:, M.A2, A2.AREA] != 0]
         face_count = mesh.shape[0]
 
         # normalise area vector and correct area size
-        mesh[:, 0, :] = mesh[:, 0, :] / mesh[:, 5, 0].reshape(face_count, 1)
-        mesh[:, 5, 0] = mesh[:, 5, 0] / 2  # halve, because areas are triangles and not parallelograms
+        mesh[:, M.NORM, :] = mesh[:, M.NORM, :] / mesh[:, M.A2, A2.AREA].reshape(face_count, 1)
+        mesh[:, M.A2, A2.AREA] = mesh[:, M.A2, A2.AREA] / 2  # halve, because areas are triangles and not parallelograms
 
         # remove small facets (these are essential for contour calculation)
         if self.NEGL_FACE_SIZE > 0:
             negl_size = [0.1 * x if self.extended_mode else x for x in [self.NEGL_FACE_SIZE]][0]
-            filtered_mesh = mesh[np.where(mesh[:, 5, 0] > negl_size)]
+            filtered_mesh = mesh[np.where(mesh[:, M.A2, A2.AREA] > negl_size)]
             if len(filtered_mesh) > 100:
                 mesh = filtered_mesh
 
@@ -280,11 +312,11 @@ class Tweak:
         print("You favour the side {} with a factor of {}".format(side, f))
 
         # Filter the aligning orientations
-        diff = np.subtract(self.mesh[:, 0, :], side)
+        diff = np.subtract(self.mesh[:, M.NORM, :], side)
         align = np.sum(diff * diff, axis=1) < 0.7654  # former ANGLE_SCALE, set static to 43.85°
         mesh_not_align = self.mesh[np.logical_not(align)]
         mesh_align = self.mesh[align]
-        mesh_align[:, 5, 0] = f * mesh_align[:, 5, 0]  # weight aligning orientations
+        mesh_align[:, M.A2, A2.AREA] = f * mesh_align[:, M.A2, A2.AREA]  # weight aligning orientations
 
         self.mesh = np.concatenate((mesh_not_align, mesh_align), axis=0)
 
@@ -405,12 +437,12 @@ class Tweak:
         Returns:
             adjusted mesh.
         """
-        self.mesh[:, 4, 0] = np.inner(self.mesh[:, 1, :], orientation)
-        self.mesh[:, 4, 1] = np.inner(self.mesh[:, 2, :], orientation)
-        self.mesh[:, 4, 2] = np.inner(self.mesh[:, 3, :], orientation)
+        self.mesh[:, M.A1, A1.V0Z] = np.inner(self.mesh[:, M.V0, :], orientation)
+        self.mesh[:, M.A1, A1.V1Z] = np.inner(self.mesh[:, M.V1, :], orientation)
+        self.mesh[:, M.A1, A1.V2Z] = np.inner(self.mesh[:, M.V2, :], orientation)
 
-        self.mesh[:, 5, 1] = np.max(self.mesh[:, 4, :], axis=1)
-        self.mesh[:, 5, 2] = np.median(self.mesh[:, 4, :], axis=1)
+        self.mesh[:, M.A2, A2.MAX_Z] = np.max(self.mesh[:, M.A1, :], axis=1)
+        self.mesh[:, M.A2, A2.MED_Z] = np.median(self.mesh[:, M.A1, :], axis=1)
         sleep(0)  # Yield, so other threads get a bit of breathing space.
 
     def calc_overhang(self, orientation, min_volume):
@@ -422,41 +454,41 @@ class Tweak:
         Returns:
             the total bottom size, overhang size and contour length of the mesh
         """
-        total_min = np.amin(self.mesh[:, 4, :])
+        total_min = np.amin(self.mesh[:, M.A1, :])
 
         # filter bottom area
-        bottom = np.sum(self.mesh[np.where(self.mesh[:, 5, 1] < total_min + self.FIRST_LAY_H), 5, 0])
+        bottom = np.sum(self.mesh[np.where(self.mesh[:, M.A2, A2.MAX_Z] < total_min + self.FIRST_LAY_H), 5, 0])
         # # equal than:
-        # bottoms = mesh[np.where(mesh[:, 5, 1] < total_min + FIRST_LAY_H)]
-        # if len(bottoms) > 0: bottom = np.sum(bottoms[:, 5, 0])
+        # bottoms = mesh[np.where(mesh[:, M.A2, A2.MAX_Z] < total_min + FIRST_LAY_H)]
+        # if len(bottoms) > 0: bottom = np.sum(bottoms[:, M.A2, A2.AREA])
         # else: bottom = 0
 
         # filter overhangs
-        overhangs = self.mesh[np.where(np.inner(self.mesh[:, 0, :], orientation) < self.ASCENT)]
-        overhangs = overhangs[np.where(overhangs[:, 5, 1] > (total_min + self.FIRST_LAY_H))]
+        overhangs = self.mesh[np.where(np.inner(self.mesh[:, M.NORM, :], orientation) < self.ASCENT)]
+        overhangs = overhangs[np.where(overhangs[:, M.A2, A2.MAX_Z] > (total_min + self.FIRST_LAY_H))]
 
         if self.extended_mode:
-            plafond = np.sum(overhangs[(overhangs[:, 0, :] == -orientation).all(axis=1), 5, 0])
+            plafond = np.sum(overhangs[(overhangs[:, M.NORM, :] == -orientation).all(axis=1), M.A2, A2.AREA])
         else:
             plafond = 0
 
         if len(overhangs) > 0:
             if min_volume:
-                heights = np.inner(overhangs[:, 1:4, :].mean(axis=1), orientation) - total_min
+                heights = np.inner(overhangs[:, M.V0:M.V2+1, :].mean(axis=1), orientation) - total_min
 
-                inner = np.inner(overhangs[:, 0, :], orientation) - self.ASCENT
-                # overhang = np.sum(heights * overhangs[:, 5, 0] * np.abs(inner * (inner < 0)) ** 2)
+                inner = np.inner(overhangs[:, M.NORM, :], orientation) - self.ASCENT
+                # overhang = np.sum(heights * overhangs[:, M.A2, A2.AREA] * np.abs(inner * (inner < 0)) ** 2)
                 overhang = np.sum((self.height_offset + self.height_log * np.log(self.height_log_k * heights + 1)) *
-                                  overhangs[:, 5, 0] * np.abs(inner * (inner < 0)) ** self.OV_H)
+                                  overhangs[:, M.A2, A2.AREA] * np.abs(inner * (inner < 0)) ** self.OV_H)
             else:
-                # overhang = np.sum(overhangs[:, 5, 0] * 2 *
+                # overhang = np.sum(overhangs[:, M.A2, A2.AREA] * 2 *
                 #                   (np.amax((np.zeros(len(overhangs)) + 0.5,
-                #                             - np.inner(overhangs[:, 0, :], orientation)),
+                #                             - np.inner(overhangs[:, M.NORM, :], orientation)),
                 #                            axis=0) - 0.5) ** 2)
                 # improved performance by finding maximum using the multiplication method, see:
                 # https://stackoverflow.com/questions/32109319/how-to-implement-the-relu-function-in-numpy
-                inner = np.inner(overhangs[:, 0, :], orientation) - self.ASCENT
-                overhang = 2 * np.sum(overhangs[:, 5, 0] * np.abs(inner * (inner < 0)) ** 2)
+                inner = np.inner(overhangs[:, M.NORM, :], orientation) - self.ASCENT
+                overhang = 2 * np.sum(overhangs[:, M.A2, A2.AREA] * np.abs(inner * (inner < 0)) ** 2)
             overhang -= self.PLAFOND_ADV * plafond
 
         else:
@@ -464,13 +496,13 @@ class Tweak:
 
         # filter the total length of the bottom area's contour
         if self.extended_mode:
-            # contours = self.mesh[total_min+self.FIRST_LAY_H < self.mesh[:, 5, 1]]
-            contours = self.mesh[np.where(self.mesh[:, 5, 2] < total_min + self.FIRST_LAY_H)]
+            # contours = self.mesh[total_min+self.FIRST_LAY_H < self.mesh[:, M.A2, A2.MAX_Z]]
+            contours = self.mesh[np.where(self.mesh[:, M.A2, A2.MED_Z] < total_min + self.FIRST_LAY_H)]
 
             if len(contours) > 0:
                 conlen = np.arange(len(contours))
-                sortsc0 = np.argsort(contours[:, 4, :], axis=1)[:, 0]
-                sortsc1 = np.argsort(contours[:, 4, :], axis=1)[:, 1]
+                sortsc0 = np.argsort(contours[:, M.A1, :], axis=1)[:, 0]
+                sortsc1 = np.argsort(contours[:, M.A1, :], axis=1)[:, 1]
 
                 con = np.array([np.subtract(
                     contours[conlen, 1 + sortsc0, :],

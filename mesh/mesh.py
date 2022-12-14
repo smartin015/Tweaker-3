@@ -45,7 +45,7 @@ class Mesh:
         return np.cross(np.subtract(v1, v0), np.subtract(v2, v0)) \
                 .reshape(row_number, 1, 3)
 
-    def __init__(self, content, negl_size=None):
+    def __init__(self, content, negl_size=None, vector_tol=None):
         """The Mesh format gets preprocessed for a better performance and stored into self.mesh
         Args:
             content (np.array): undefined representation of the mesh
@@ -55,6 +55,8 @@ class Mesh:
                              addendum1(x,y,z) = (v0_z, v1_z, v2_z)
                              addendum2(x,y,z) = (norm_magnitude, max_z, median_z)
         """
+        self.vector_tol = vector_tol
+
         mesh = np.array(content, dtype=np.float64)
 
         if len(mesh.shape) not in (2,3) or mesh.shape[0] == 0 or mesh.shape[1] == 0:
@@ -198,17 +200,17 @@ class Mesh:
         candidates += [Orientation(-c.vec, c.weight) for c in candidates]
         return candidates
 
-    def project_vertices(self, rotation):
+    def project_vertices(self, orient):
         """Supplement the mesh array with scalars (max and median)
         for each face projected onto the orientation vector.
         Args:
-            rotation (np.array): 3x3 rotation matrix
+            orient: Orientation
         Returns:
             None
         """
-        self.mesh[:, M.A1, A1.V0Z] = np.inner(self.mesh[:, V0, :], rotation)
-        self.mesh[:, M.A1, A1.V1Z] = np.inner(self.mesh[:, V1, :], rotation)
-        self.mesh[:, M.A1, A1.V2Z] = np.inner(self.mesh[:, V2, :], rotation)
+        self.mesh[:, M.A1, A1.V0Z] = np.inner(self.mesh[:, M.V0, :], orient.vec)
+        self.mesh[:, M.A1, A1.V1Z] = np.inner(self.mesh[:, M.V1, :], orient.vec)
+        self.mesh[:, M.A1, A1.V2Z] = np.inner(self.mesh[:, M.V2, :], orient.vec)
 
         self.mesh[:, M.A2, A2.MAX_Z] = np.max(self.mesh[:, M.A1, :], axis=1)
         self.mesh[:, M.A2, A2.MED_Z] = np.median(self.mesh[:, M.A1, :], axis=1)
@@ -284,39 +286,3 @@ class Mesh:
             contour = 4 * np.sqrt(bottom)
         return bottom, overhang, contour
 
-    def euler(self, bestside):
-        """Calculating euler rotation parameters and rotational matrix.
-        Args:
-            bestside (np.array): vector of the best orientation (3).
-        Returns:
-            rotation axis, rotation angle, rotational matrix.
-        """
-        if not isinstance(bestside, (list, np.ndarray)) or len(bestside) != 3:
-            print(f"Best side not as excepted: {bestside}, type: {type(bestside)}")
-        if bestside[0] ** 2 + bestside[1] ** 2 + (bestside[2] + 1.) ** 2 < abs(self.VECTOR_TOL):
-            rotation_axis = [1., 0., 0.]
-            phi = np.pi
-        elif bestside[0] ** 2 + bestside[1] ** 2 + (bestside[2] - 1.) ** 2 < abs(self.VECTOR_TOL):
-            rotation_axis = [1., 0., 0.]
-            phi = 0.
-        else:
-            phi = np.pi - np.arccos(-bestside[2] + 0.0)
-            rotation_axis = np.array(
-                [-bestside[1] + 0.0, bestside[0] + 0.0, 0.])  # the z-axis is fixed to 0 for this rotation
-            rotation_axis = rotation_axis / np.linalg.norm(rotation_axis)  # normalization
-
-        v = rotation_axis
-        cos_phi = np.cos(phi)
-        sin_phi = np.sin(phi)
-        rotational_matrix = np.empty((3, 3), dtype=np.float64)
-        rotational_matrix[0, 0] = v[0] * v[0] * (1 - cos_phi) + cos_phi
-        rotational_matrix[0, 1] = v[0] * v[1] * (1 - cos_phi) - v[2] * sin_phi
-        rotational_matrix[0, 2] = v[0] * v[2] * (1 - cos_phi) + v[1] * sin_phi
-        rotational_matrix[1, 0] = v[1] * v[0] * (1 - cos_phi) + v[2] * sin_phi
-        rotational_matrix[1, 1] = v[1] * v[1] * (1 - cos_phi) + cos_phi
-        rotational_matrix[1, 2] = v[1] * v[2] * (1 - cos_phi) - v[0] * sin_phi
-        rotational_matrix[2, 0] = v[2] * v[0] * (1 - cos_phi) - v[1] * sin_phi
-        rotational_matrix[2, 1] = v[2] * v[1] * (1 - cos_phi) + v[0] * sin_phi
-        rotational_matrix[2, 2] = v[2] * v[2] * (1 - cos_phi) + cos_phi
-
-        return [list(rotation_axis), phi, rotational_matrix]

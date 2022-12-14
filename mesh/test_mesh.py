@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from math import cos, sin
+from math import cos, sin, sqrt
 
 from .orientation import Orientation
 from .mesh import Mesh, InvalidMeshException, M, A1, A2
@@ -104,15 +104,27 @@ def test_death_star():
     ])
     assert Orientation([0,0,1], 2) in m.death_star(best_n=1, iterations=100)
 
-@pytest.mark.skip("TODO")
 def test_project_vertices():
-    pass
+    m = Mesh([[0,0,0],[1,0,0],[0,1,0]]) # Z up triangle
+
+    # Projection on +Z is 0 (all verts have z=0)
+    m.project_vertices(Orientation([0,0,1]))
+    assert np.allclose(m.mesh[0, M.A1, :], [0,0,0])
+    assert m.mesh[0, M.A2, A2.MAX_Z] == 0
+    assert m.mesh[0, M.A2, A2.MED_Z] == 0
+
+    # Projection along X captures X axis
+    m.project_vertices(Orientation([1,0,0]))
+    assert np.allclose(m.mesh[0, M.A1, :], [0, 1, 0])
+    assert m.mesh[0, M.A2, A2.MAX_Z] == 1
+    assert m.mesh[0, M.A2, A2.MED_Z] == 0
+
+    # Projection along XY captures both X and Y axis aligned vert
+    m.project_vertices(Orientation([1,1,0]))
+    assert np.allclose(m.mesh[0, M.A1, :], [0, 1/sqrt(2), 1/sqrt(2)])
+    assert m.mesh[0, M.A2, A2.MAX_Z] == 1/sqrt(2)
+    assert m.mesh[0, M.A2, A2.MED_Z] == 1/sqrt(2)
 
 @pytest.mark.skip("TODO")
 def test_calc_overhang():
     pass
-
-@pytest.mark.skip("TODO")
-def test_euler():
-    pass
-

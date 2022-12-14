@@ -67,3 +67,42 @@ class Orientation:
                 result.append(i)
         return result 
 
+    def euler(self, vector_tol):
+        """Calculate euler rotation parameters and rotational matrix.
+        Args:
+            vector_tol (float): tolerance of vertical orientations (close to 0)
+        Returns:
+            rotation axis, rotation angle, 3x3 rotational matrix.
+        """
+        v = self.vec
+        if v[0] ** 2 + v[1] ** 2 + (v[2] + 1.) ** 2 < abs(vector_tol):
+            # If oriented z-down within tolerance
+            r = [1., 0., 0.]
+            phi = np.pi
+        elif v[0] ** 2 + v[1] ** 2 + (v[2] - 1.) ** 2 < abs(vector_tol):
+            # Basically z-up within tolerance
+            r = [1., 0., 0.]
+            phi = 0.
+        else:
+            # Get rotation axis and angle when axis is fixed to z=0
+            phi = np.pi - np.arccos(-v[2])
+            r = np.array(
+                [-v[1], v[0], 0.])
+            r /= np.linalg.norm(r)  # normalize
+
+        # Construct the rotation matrix
+        cos_phi = np.cos(phi)
+        sin_phi = np.sin(phi)
+        m = np.empty((3, 3), dtype=np.float64)
+        m[0, 0] = r[0] * r[0] * (1 - cos_phi) + cos_phi
+        m[0, 1] = r[0] * r[1] * (1 - cos_phi) - r[2] * sin_phi
+        m[0, 2] = r[0] * r[2] * (1 - cos_phi) + r[1] * sin_phi
+        m[1, 0] = r[1] * r[0] * (1 - cos_phi) + r[2] * sin_phi
+        m[1, 1] = r[1] * r[1] * (1 - cos_phi) + cos_phi
+        m[1, 2] = r[1] * r[2] * (1 - cos_phi) - r[0] * sin_phi
+        m[2, 0] = r[2] * r[0] * (1 - cos_phi) - r[1] * sin_phi
+        m[2, 1] = r[2] * r[1] * (1 - cos_phi) + r[0] * sin_phi
+        m[2, 2] = r[2] * r[2] * (1 - cos_phi) + cos_phi
+
+        return r, phi, m
+

@@ -34,3 +34,37 @@ def test_decimate():
     assert len(Orientation.decimate([
         Orientation([0,0,1]), 
         Orientation([0,0,-1])])) == 2
+
+def test_euler():
+    TOL = -0.0008385913582234466 # From MeshTweaker.py
+
+    # Test with Z-up orientation
+    r, phi, m = Orientation([0,0,1]).euler(TOL)
+    assert np.allclose(r, [1,0,0])
+    assert phi == 0
+    assert np.allclose(m, [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+    ])
+
+    # Test with Z-down orientation
+    r, phi, m = Orientation([0,0,-1]).euler(TOL)
+    assert np.allclose(r, [1,0,0])
+    assert phi == np.pi
+    assert np.allclose(m, [
+        [1, 0, 0],
+        [0, -1, 0],
+        [0, 0, -1],
+    ])
+
+    # Test X axis orientation (i.e. rot 90 deg around the Y axis)
+    r, phi, m = Orientation([1,0,0]).euler(TOL)
+    assert np.allclose(r, [0,1,0])
+    assert phi == np.pi/2
+    assert np.allclose(m, [
+        [0, 0, 1],
+        [0, 1, 0],
+        [-1, 0, 0],
+    ])
+
